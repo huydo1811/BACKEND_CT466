@@ -2,6 +2,5 @@ services:
   - type: web
     name: backend-ct466
     env: node
-    rootDir: Backend
     buildCommand: npm install
     startCommand: npm start

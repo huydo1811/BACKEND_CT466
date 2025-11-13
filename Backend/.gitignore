@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.log
+dist/
+build/.env
+uploads/*
+uploads
+scripts/*
+scripts

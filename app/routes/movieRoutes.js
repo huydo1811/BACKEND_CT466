@@ -29,7 +29,8 @@ router.post(
   upload.fields([
     { name: 'poster', maxCount: 1 },
     { name: 'backdrop', maxCount: 1 },
-    { name: 'videoUrl', maxCount: 1 },
+    { name: 'video', maxCount: 1 },      
+    { name: 'videoUrl', maxCount: 1 },   
   ]),
   createMovie
 );
@@ -57,6 +58,7 @@ router.put(
   upload.fields([
     { name: 'poster', maxCount: 1 },
     { name: 'backdrop', maxCount: 1 },
+    { name: 'video', maxCount: 1 },      
     { name: 'videoUrl', maxCount: 1 },
   ]),
   updateMovie

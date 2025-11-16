@@ -142,13 +142,15 @@ export const createMovie = asyncHandler(async (req, res) => {
   const data = { ...req.body };
 
   if (req.files?.poster?.[0]) {
-    data.poster = req.files.poster[0].path; // Cloudinary URL
+    data.poster = req.files.poster[0].path; 
   }
   if (req.files?.backdrop?.[0]) {
     data.backdrop = req.files.backdrop[0].path;
   }
   if (req.files?.videoUrl?.[0]) {
     data.videoUrl = req.files.videoUrl[0].path;
+  } else if (req.files?.video?.[0]) {
+    data.videoUrl = req.files.video[0].path;
   }
 
   // normalize numbers
@@ -233,14 +235,24 @@ export const updateMovie = asyncHandler(async (req, res) => {
 
   // map uploaded files -> payload
   if (req.files && req.files.poster && req.files.poster[0]) {
-    payload.poster = buildFilePath(req, req.files.poster[0].filename, 'movies')
+    payload.poster = req.files.poster[0].path
   }
   if (req.files && req.files.backdrop && req.files.backdrop[0]) {
-    payload.backdrop = buildFilePath(req, req.files.backdrop[0].filename, 'movies')
+    payload.backdrop = req.files.backdrop[0].path
   }
   if (req.files && req.files.video && req.files.video[0]) {
-    payload.videoUrl = buildFilePath(req, req.files.video[0].filename, 'movies')
+    payload.videoUrl = req.files.video[0].path
   }
+  if (req.files && req.files.videoUrl && req.files.videoUrl[0]) {
+    payload.videoUrl = req.files.videoUrl[0].path
+  }
+
+
+  ['poster', 'backdrop', 'videoUrl'].forEach(field => {
+    if (typeof payload[field] !== 'string') {
+      delete payload[field]
+    }
+  })
 
   // use service that sẽ xóa file cũ nếu file mới khác file cũ
   const updated = await movieService.updateMovie(id, payload, req.user?.id)

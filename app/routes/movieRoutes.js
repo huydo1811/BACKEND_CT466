@@ -22,28 +22,6 @@ import {
 } from '../controllers/movieController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
-import multer from 'multer'
-import fs from 'fs'
-import path from 'path'
-
-// ensure uploads folder exists
-const uploadsDir = path.join(process.cwd(), 'uploads', 'movies')
-fs.mkdirSync(uploadsDir, { recursive: true })
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname)
-    const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}${ext}`
-    cb(null, name)
-  }
-})
-// allow large uploads (video)
-const upload = multer({
-  storage,
-  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB
-})
-
 const router = express.Router();
 
 router.post(

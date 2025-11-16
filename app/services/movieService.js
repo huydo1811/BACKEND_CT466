@@ -221,31 +221,38 @@ class MovieService {
     // Hàm helper so sánh 2 đường dẫn file (chỉ so sánh tên file cuối)
     const isSameFile = (path1, path2) => {
       if (!path1 || !path2) return false
-      const name1 = path1.split('/').pop().split('?')[0] // Lấy tên file, bỏ query string
+      const name1 = path1.split('/').pop().split('?')[0]
       const name2 = path2.split('/').pop().split('?')[0]
       return name1 === name2
     }
 
     // Nếu có upload poster mới KHÁC poster cũ, xóa poster cũ
     if (data.poster && existing.poster && !isSameFile(data.poster, existing.poster)) {
-      await _deleteCloudinaryFile(existing.poster) // <-- Thay _deleteLocalFile
+      await _deleteCloudinaryFile(existing.poster)
     }
 
     // Nếu có upload backdrop mới KHÁC backdrop cũ, xóa backdrop cũ
     if (data.backdrop && existing.backdrop && !isSameFile(data.backdrop, existing.backdrop)) {
-      await _deleteLocalFile(existing.backdrop)
+      await _deleteCloudinaryFile(existing.backdrop) // <-- SỬA ĐÂY
     }
 
     // Nếu có upload video mới KHÁC video cũ, xóa video cũ
     if (data.videoUrl && existing.videoUrl && !isSameFile(data.videoUrl, existing.videoUrl)) {
-      await _deleteLocalFile(existing.videoUrl)
+      await _deleteCloudinaryFile(existing.videoUrl) // <-- SỬA ĐÂY
     }
 
     // Cập nhật phim
     Object.assign(existing, data)
     if (userId) existing.updatedBy = userId
     await existing.save()
-    return existing
+
+    // Populate lại để trả về đầy đủ thông tin
+    return await Movie.findById(existing._id)
+      .populate('categories', 'name slug')
+      .populate('country', 'name code')
+      .populate('actors', 'name avatar slug')
+      .populate('createdBy', 'username fullName')
+      .populate('updatedBy', 'username fullName')
   }
  
   // Xóa phim

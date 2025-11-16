@@ -11,9 +11,25 @@ const isValidObjectId = (id) => {
   return mongoose.Types.ObjectId.isValid(id) && /^[0-9a-fA-F]{24}$/.test(id);
 };
 
-const buildFileUrl = (req, filename, folder = 'movies') => {
+const buildFilePath = (filename, folder = 'movies') => {
   if (!filename) return undefined
-  return `${req.protocol}://${req.get('host')}/uploads/${folder}/${filename}`
+  return `/uploads/${folder}/${filename}`
+}
+
+const getPublicUrl = (req, path) => {
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`
+}
+
+const mapMovieFileUrls = (req, movie) => {
+  if (!movie) return movie
+  const obj = movie.toObject ? movie.toObject() : movie
+  if (obj.poster) obj.poster = getPublicUrl(req, obj.poster)
+  if (obj.backdrop) obj.backdrop = getPublicUrl(req, obj.backdrop)
+  if (obj.videoUrl) obj.videoUrl = getPublicUrl(req, obj.videoUrl)
+  return obj
 }
 
 // Lấy tất cả phim với filters (Public)
@@ -33,11 +49,12 @@ export const getAllMovies = asyncHandler(async (req, res) => {
   };
   
   const result = await movieService.getAllMovies(options);
-  
+  const movies = (result.movies || []).map(m => mapMovieFileUrls(req, m));
+
   res.status(200).json({
     success: true,
     message: 'Lấy danh sách phim thành công',
-    data: result.movies,
+    data: movies,
     pagination: result.pagination,
     filters: {
       search: options.search,
@@ -58,20 +75,19 @@ export const getMovieBySlug = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Không tìm thấy phim' });
   }
 
-  // attach reviews + ratingStats (lấy nhiều review để hiển thị)
   try {
     const rev = await reviewService.getMovieReviews(movie._id || movie.id, { page: 1, limit: 1000 });
     const obj = movie.toObject ? movie.toObject() : (movie || {});
     obj.reviews = rev.reviews || [];
     obj.ratingStats = rev.ratingStats || {};
-    // ensure movie.rating reflects aggregated value if available
     if (obj.ratingStats && obj.ratingStats.averageRating != null) {
       obj.rating = { average: obj.ratingStats.averageRating, count: obj.ratingStats.totalReviews ?? obj.rating.count }
     }
-    return res.status(200).json({ success: true, data: obj });
+    const mapped = mapMovieFileUrls(req, obj);
+    return res.status(200).json({ success: true, data: mapped });
   } catch (err) {
-    // fallback: trả movie không có reviews nếu lỗi reviews
-    return res.status(200).json({ success: true, data: movie });
+    const mappedFallback = mapMovieFileUrls(req, movie);
+    return res.status(200).json({ success: true, data: mappedFallback });
   }
 });
 
@@ -92,11 +108,14 @@ export const getMovieById = asyncHandler(async (req, res) => {
     if (obj.ratingStats && obj.ratingStats.averageRating != null) {
       obj.rating = { average: obj.ratingStats.averageRating, count: obj.ratingStats.totalReviews ?? obj.rating.count }
     }
-    return res.status(200).json({ success: true, data: obj });
+    const mapped = mapMovieFileUrls(req, obj);
+    return res.status(200).json({ success: true, data: mapped });
   } catch (err) {
-    return res.status(200).json({ success: true, data: movie });
+    const mappedFallback = mapMovieFileUrls(req, movie);
+    return res.status(200).json({ success: true, data: mappedFallback });
   }
 });
+
 
 // Lấy phim theo ID (Admin)
 export const getMovieByIdAdmin = asyncHandler(async (req, res) => {
@@ -114,7 +133,7 @@ export const getMovieByIdAdmin = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Lấy phim thành công',
-    data: movie
+    data: mapMovieFileUrls(req, movie)
   });
 });
 
@@ -135,11 +154,15 @@ export const createMovie = asyncHandler(async (req, res) => {
 
   // map poster file
   if (req.files?.poster?.[0]) {
-    data.poster = buildFileUrl(req, req.files.poster[0].filename, 'movies')
+    data.poster = buildFilePath(req.files.poster[0].filename, 'movies')
   }
   // map backdrop file
   if (req.files?.backdrop?.[0]) {
-    data.backdrop = buildFileUrl(req, req.files.backdrop[0].filename, 'movies')
+    data.backdrop = buildFilePath(req.files.backdrop[0].filename, 'movies')
+  }
+
+  if (req.files?.video?.[0]) {
+    data.videoUrl = buildFilePath(req.files.video[0].filename, 'movies')
   }
 
   // If user requested splitting seasons into separate entries
@@ -186,10 +209,11 @@ export const createMovie = asyncHandler(async (req, res) => {
   // default single doc (either series single doc or movie)
   const movie = await Movie.create(data)
 
+  const mapped = mapMovieFileUrls(req, movie)
   res.status(201).json({
     success: true,
     message: 'Tạo phim/series thành công',
-    data: movie
+    data: mapped
   })
 });
 
@@ -212,19 +236,19 @@ export const updateMovie = asyncHandler(async (req, res) => {
 
   // map uploaded files -> payload
   if (req.files && req.files.poster && req.files.poster[0]) {
-    payload.poster = buildFileUrl(req, req.files.poster[0].filename, 'movies')
+    payload.poster = buildFilePath(req, req.files.poster[0].filename, 'movies')
   }
   if (req.files && req.files.backdrop && req.files.backdrop[0]) {
-    payload.backdrop = buildFileUrl(req, req.files.backdrop[0].filename, 'movies')
+    payload.backdrop = buildFilePath(req, req.files.backdrop[0].filename, 'movies')
   }
   if (req.files && req.files.video && req.files.video[0]) {
-    payload.videoUrl = buildFileUrl(req, req.files.video[0].filename, 'movies')
+    payload.videoUrl = buildFilePath(req, req.files.video[0].filename, 'movies')
   }
 
   // use service that sẽ xóa file cũ nếu file mới khác file cũ
   const updated = await movieService.updateMovie(id, payload, req.user?.id)
   if (!updated) return res.status(404).json({ success: false, message: 'Movie not found' })
-  res.json({ success: true, data: updated })
+  res.json({ success: true, data: mapMovieFileUrls(req, updated) })
 });
 
 // Xóa phim (Admin)
@@ -313,34 +337,35 @@ export const getFeaturedMovies = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   
   const movies = await movieService.getFeaturedMovies(limit);
+  const mapped = (movies || []).map(m => mapMovieFileUrls(req, m));
   
   res.status(200).json({
     success: true,
     message: 'Lấy phim nổi bật thành công',
-    data: movies,
-    count: movies.length
+    data: mapped,
+    count: mapped.length
   });
 });
 
 export const getLatestMovies = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
-  const type = req.query.type || null; // <-- thêm
+  const type = req.query.type || null;
   const movies = await movieService.getLatestMovies(limit, type);
   
-  res.status(200).json({
+   res.status(200).json({
     success: true,
-    data: movies
+    data: (movies || []).map(m => mapMovieFileUrls(req, m))
   });
 });
 
 export const getHotMovies = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
-  const type = req.query.type || null; // <-- thêm
+  const type = req.query.type || null;
   const movies = await movieService.getHotMovies(limit, type);
   
   res.status(200).json({
-    success: true,
-    data: movies
+   success: true,
+   data: (movies || []).map(m => mapMovieFileUrls(req, m))
   });
 });
 
@@ -350,7 +375,7 @@ export const getRankingMovies = asyncHandler(async (req, res) => {
   
   res.status(200).json({
     success: true,
-    data: movies
+    data: (movies || []).map(m => mapMovieFileUrls(req, m))
   });
 });
 
@@ -380,7 +405,7 @@ export const searchMovies = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: `Tìm thấy ${result.pagination.totalItems} kết quả cho "${q}"`,
-    data: result.movies,
+    data: (result.movies || []).map(m => mapMovieFileUrls(req, m)),
     pagination: result.pagination,
     searchQuery: q
   });
@@ -412,7 +437,7 @@ export const getMoviesByCategory = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Lấy phim theo category thành công',
-    data: result.movies,
+     data: (result.movies || []).map(m => mapMovieFileUrls(req, m)),
     pagination: result.pagination
   });
 });
@@ -454,9 +479,9 @@ export const getMovieStats = asyncHandler(async (req, res) => {
 
 export const getHeroMovie = asyncHandler(async (req, res) => {
   const movie = await movieService.getHeroMovie();
-  res.status(200).json({
+ res.status(200).json({
     success: true,
-    data: movie
+    data: mapMovieFileUrls(req, movie)
   });
 });
 

@@ -4,7 +4,8 @@ import path from 'path'
 import mongoose from 'mongoose'
 import Category from '../models/Category.js'
 import reviewService from './reviewService.js'
- 
+import { v2 as cloudinary } from 'cloudinary'
+
 const uploadsDir = path.join(process.cwd(), 'uploads', 'movies')
 
 const _deleteLocalFile = (fileUrl) => {
@@ -18,6 +19,19 @@ const _deleteLocalFile = (fileUrl) => {
     if (fs.existsSync(fp)) fs.unlinkSync(fp)
   } catch (err) {
     console.warn('delete local movie file error', err)
+  }
+}
+
+const _deleteCloudinaryFile = async (fileUrl) => {
+  if (!fileUrl || typeof fileUrl !== 'string') return
+  try {
+    // Extract public_id from URL
+    const match = fileUrl.match(/\/v\d+\/(.+)\.\w+$/)
+    if (!match) return
+    const publicId = match[1]
+    await cloudinary.uploader.destroy(publicId)
+  } catch (err) {
+    console.warn('delete cloudinary file error', err)
   }
 }
 
@@ -200,39 +214,38 @@ class MovieService {
   }
   
   // Cập nhật phim
-  async updateMovie(id, movieData, userId) {
-    try {
-      // find existing to check old files
-      const existing = await Movie.findById(id).lean()
-      if (!existing) throw new Error('Phim không tồn tại')
+  async updateMovie(id, data, userId) {
+    const existing = await Movie.findById(id)
+    if (!existing) return null
 
-      // if poster replaced, remove old poster file
-      if (movieData.poster && existing.poster && movieData.poster !== existing.poster) {
-        _deleteLocalFile(existing.poster)
-      }
-      // if backdrop replaced, remove old backdrop file
-      if (movieData.backdrop && existing.backdrop && movieData.backdrop !== existing.backdrop) {
-        _deleteLocalFile(existing.backdrop)
-      }
-      // if video replaced, remove old video file
-      if (movieData.videoUrl && existing.videoUrl && movieData.videoUrl !== existing.videoUrl) {
-        _deleteLocalFile(existing.videoUrl)
-      }
-
-      const movie = await Movie.findByIdAndUpdate(
-        id,
-        movieData,
-        { new: true, runValidators: true }
-      ).populate('categories country actors');
-      
-      if (!movie) {
-        throw new Error('Phim không tồn tại');
-      }
-      
-      return movie;
-    } catch (error) {
-      throw new Error(`Lỗi khi cập nhật phim: ${error.message}`);
+    // Hàm helper so sánh 2 đường dẫn file (chỉ so sánh tên file cuối)
+    const isSameFile = (path1, path2) => {
+      if (!path1 || !path2) return false
+      const name1 = path1.split('/').pop().split('?')[0] // Lấy tên file, bỏ query string
+      const name2 = path2.split('/').pop().split('?')[0]
+      return name1 === name2
     }
+
+    // Nếu có upload poster mới KHÁC poster cũ, xóa poster cũ
+    if (data.poster && existing.poster && !isSameFile(data.poster, existing.poster)) {
+      await _deleteCloudinaryFile(existing.poster) // <-- Thay _deleteLocalFile
+    }
+
+    // Nếu có upload backdrop mới KHÁC backdrop cũ, xóa backdrop cũ
+    if (data.backdrop && existing.backdrop && !isSameFile(data.backdrop, existing.backdrop)) {
+      await _deleteLocalFile(existing.backdrop)
+    }
+
+    // Nếu có upload video mới KHÁC video cũ, xóa video cũ
+    if (data.videoUrl && existing.videoUrl && !isSameFile(data.videoUrl, existing.videoUrl)) {
+      await _deleteLocalFile(existing.videoUrl)
+    }
+
+    // Cập nhật phim
+    Object.assign(existing, data)
+    if (userId) existing.updatedBy = userId
+    await existing.save()
+    return existing
   }
  
   // Xóa phim

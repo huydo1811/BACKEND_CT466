@@ -221,7 +221,6 @@ export const updateMovie = asyncHandler(async (req, res) => {
   const { id } = req.params
   const payload = { ...req.body }
 
-  // debug logs (ok để dev)
   console.log('updateMovie req.body:', req.body)
   console.log('updateMovie req.files:', req.files)
 
@@ -233,28 +232,27 @@ export const updateMovie = asyncHandler(async (req, res) => {
     payload.totalEpisodes = Number(payload.totalEpisodes)
   }
 
-  // map uploaded files -> payload
-  if (req.files && req.files.poster && req.files.poster[0]) {
+  // Chỉ cập nhật file nếu có upload mới
+  if (req.files?.poster?.[0]) {
     payload.poster = req.files.poster[0].path
+  } else {
+    delete payload.poster  // Không update nếu không có file mới
   }
-  if (req.files && req.files.backdrop && req.files.backdrop[0]) {
+
+  if (req.files?.backdrop?.[0]) {
     payload.backdrop = req.files.backdrop[0].path
+  } else {
+    delete payload.backdrop
   }
-  if (req.files && req.files.video && req.files.video[0]) {
+
+  if (req.files?.video?.[0]) {
     payload.videoUrl = req.files.video[0].path
-  }
-  if (req.files && req.files.videoUrl && req.files.videoUrl[0]) {
+  } else if (req.files?.videoUrl?.[0]) {
     payload.videoUrl = req.files.videoUrl[0].path
+  } else {
+    delete payload.videoUrl
   }
 
-
-  ['poster', 'backdrop', 'videoUrl'].forEach(field => {
-    if (typeof payload[field] !== 'string') {
-      delete payload[field]
-    }
-  })
-
-  // use service that sẽ xóa file cũ nếu file mới khác file cũ
   const updated = await movieService.updateMovie(id, payload, req.user?.id)
   if (!updated) return res.status(404).json({ success: false, message: 'Movie not found' })
   res.json({ success: true, data: mapMovieFileUrls(req, updated) })

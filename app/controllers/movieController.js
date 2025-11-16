@@ -139,7 +139,17 @@ export const getMovieByIdAdmin = asyncHandler(async (req, res) => {
 
 // Tạo phim mới (Admin)
 export const createMovie = asyncHandler(async (req, res) => {
-  const data = { ...req.body }
+  const data = { ...req.body };
+
+  if (req.files?.poster?.[0]) {
+    data.poster = req.files.poster[0].path; // Cloudinary URL
+  }
+  if (req.files?.backdrop?.[0]) {
+    data.backdrop = req.files.backdrop[0].path;
+  }
+  if (req.files?.videoUrl?.[0]) {
+    data.videoUrl = req.files.videoUrl[0].path;
+  }
 
   // normalize numbers
   if (typeof data.seasons !== 'undefined' && data.seasons !== '') {
@@ -150,19 +160,6 @@ export const createMovie = asyncHandler(async (req, res) => {
   }
   if (typeof data.totalEpisodes !== 'undefined' && data.totalEpisodes !== '') {
     data.totalEpisodes = Number(data.totalEpisodes)
-  }
-
-  // map poster file
-  if (req.files?.poster?.[0]) {
-    data.poster = buildFilePath(req.files.poster[0].filename, 'movies')
-  }
-  // map backdrop file
-  if (req.files?.backdrop?.[0]) {
-    data.backdrop = buildFilePath(req.files.backdrop[0].filename, 'movies')
-  }
-
-  if (req.files?.video?.[0]) {
-    data.videoUrl = buildFilePath(req.files.video[0].filename, 'movies')
   }
 
   // If user requested splitting seasons into separate entries

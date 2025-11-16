@@ -1,4 +1,5 @@
 import express from 'express';
+import upload from '../config/multerCloundinary.js';
 import {
   getAllMovies,
   getMovieBySlug,
@@ -44,6 +45,16 @@ const upload = multer({
 })
 
 const router = express.Router();
+
+router.post(
+  '/',
+  upload.fields([
+    { name: 'poster', maxCount: 1 },
+    { name: 'backdrop', maxCount: 1 },
+    { name: 'videoUrl', maxCount: 1 },
+  ]),
+  createMovie
+);
 
 // Public routes
 router.get('/search', searchMovies);
